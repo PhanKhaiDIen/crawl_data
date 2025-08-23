@@ -13,7 +13,7 @@ import pandas as pd
 
 # ===================== CONFIG =====================
 CATEGORY_ID = 1805           # Speaker / Loa
-MAX_PRODUCTS = 300           # tối đa sản phẩm muốn lấy (đổi 100 nếu muốn)
+MAX_PRODUCTS = 100           # tối đa sản phẩm muốn lấy (đổi 100 nếu muốn)
 LIMIT_PER_PAGE = 40          # theo API Tiki
 DOWNLOAD_IMAGES = True       # bật/tắt tải ảnh
 
