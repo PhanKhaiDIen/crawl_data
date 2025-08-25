@@ -9,10 +9,10 @@ FILES = [
     "data_cleaned/laptop.xlsx",
     "data_cleaned/camera.xlsx",
     "data_cleaned/speaker.xlsx",
-    "data_cleaned/tv.xlsx",   # nếu không có file này thì xoá/bỏ comment dòng này
+    "data_cleaned/tv.xlsx"
 ]
 SAVE_OUTPUT = True
-OUTPUT_PATH = "integrated_products.xlsx"
+OUTPUT_PATH = "integrated_data.xlsx"
 
 # ===== helpers =====
 def strip_accents_lower(s):
@@ -99,7 +99,7 @@ frames = []
 for f in FILES:
     p = Path(f)
     if not p.exists():
-        print(f"⚠️ Bỏ qua: không thấy file {f}")
+        print(f"Bỏ qua: không thấy file {f}")
         continue
     raw = pd.read_excel(p)
     uni = unify_schema(raw, source_name=p.stem)
@@ -126,15 +126,15 @@ df_integrated = deduplicate_priority(df_integrated)
 preferred = [c for c in [
     "id","name","brand","price","rating_average",
     "quantity_sold_value","seller_product_id","category_l1",
-    "image_path","thumbnail_url","source_file"  # source_file sẽ không có vì ta không thêm; giữ để dễ mở rộng
+    "image_path","thumbnail_url","source_file"
 ] if c in df_integrated.columns]
 rest = [c for c in df_integrated.columns if c not in preferred]
 df_integrated = df_integrated[preferred + rest]
 
-print("🏁 Integration xong. Shape:", df_integrated.shape)
+print("Integration xong. Shape:", df_integrated.shape)
 df_integrated.head(10)
 
 # Lưu file
 if SAVE_OUTPUT:
     df_integrated.to_excel(OUTPUT_PATH, index=False)
-    print("💾 Đã lưu:", OUTPUT_PATH)
+    print("Đã lưu:", OUTPUT_PATH)
