@@ -10,7 +10,7 @@ SRC_DIR        = Path("crawl_data/images")  # chỉ tìm ảnh trong thư mục 
 OUT_DIR        = Path("images_png")         # nơi lưu PNG
 TARGET_SIZE    = (256, 256)
 KEEP_ASPECT    = True                       # True: giữ tỷ lệ + pad; False: resize ép
-OVERWRITE_PNG  = False                      # False: png tồn tại thì bỏ qua
+OVERWRITE_PNG  = False                  # False: png tồn tại thì bỏ qua
 
 # ========= HÀM PHỤ =========
 def safe_category(val):
