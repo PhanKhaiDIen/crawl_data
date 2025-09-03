@@ -16,7 +16,7 @@ from tensorflow.keras.utils import load_img, img_to_array
 
 
 # ===================== CẤU HÌNH =====================
-INPUT_XLSX    = "data_converted.xlsx"              # file dữ liệu nguồn
+INPUT_XLSX    = "encoding_data.xlsx"              # file dữ liệu nguồn
 OUTPUT_XLSX   = "data_with_dups.xlsx"              # file dữ liệu sau cập nhật
 PAIRS_XLSX    = "duplicate_pairs.xlsx"             # danh sách cặp trùng chi tiết
 TXT_REPORT    = "duplicates.txt"                   # báo cáo văn bản (tuỳ chọn)
