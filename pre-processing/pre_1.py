@@ -117,7 +117,7 @@ for col in ["name","brand"]:
         before = len(df_integrated)
         df_integrated = df_integrated[df_integrated[col].astype(str).str.strip().ne("")]
         if len(df_integrated) != before:
-            print(f"✂ Loại {before-len(df_integrated)} hàng thiếu '{col}'")
+            print(f"Loại {before-len(df_integrated)} hàng thiếu '{col}'")
 
 # Khử trùng lặp theo ưu tiên
 df_integrated = deduplicate_priority(df_integrated)
