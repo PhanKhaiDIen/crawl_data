@@ -1,24 +1,10 @@
-# -*- coding: utf-8 -*-
-"""
-Encoding step: đọc normalized_data.xlsx và ghi encoded_data.xlsx
-- Không sắp xếp lại thứ tự cột.
-- Giữ nguyên các cột gốc; chỉ THÊM các cột đã mã hoá ở CUỐI DataFrame.
-- Chiến lược:
-  * Numeric: giữ nguyên (ép kiểu an toàn).
-  * Boolean: chuyển về Int64 (0/1/NA) -> thêm cột *_bin nếu bạn muốn, ở đây mã hoá trực tiếp lên cột gốc.
-  * Bucket (ordinal): mã hoá theo thứ tự business -> thêm cột <col>_ord.
-  * Categorical low-card (<= LOW_CARD_MAX_UNIQUE giá trị duy nhất): One-Hot -> thêm cột <col>_<value>.
-  * Categorical high-card: Frequency + Stable Label -> thêm <col>_freq, <col>_le.
-- Lưu metadata encoder (mapping) để tái sử dụng: encoders/encoders_meta.json
-"""
-
 import pandas as pd
 import numpy as np
 import json
 from pathlib import Path
 
 # ===================== CONFIG =====================
-IN_PATH  = "normalized_data.xlsx"
+IN_PATH  = "data_converted.xlsx"
 OUT_PATH = "encoded_data.xlsx"
 ENCODER_DIR = Path("encoders")
 LOW_CARD_MAX_UNIQUE = 30  # ngưỡng cho one-hot
