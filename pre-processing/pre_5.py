@@ -16,15 +16,15 @@ from tensorflow.keras.utils import load_img, img_to_array
 
 
 # ===================== CẤU HÌNH =====================
-INPUT_XLSX    = "encoding_data.xlsx"              # file dữ liệu nguồn
-OUTPUT_XLSX   = "data_with_dups.xlsx"             # file dữ liệu sau cập nhật
-PAIRS_XLSX    = "duplicate_pairs.xlsx"            # danh sách cặp trùng chi tiết
-TXT_REPORT    = "duplicates.txt"                  # báo cáo văn bản (tuỳ chọn)
-IMAGE_COL     = "image_path"                      # tên cột đường dẫn ảnh trong Excel
-ID_COL        = "id"                              # tên cột id (nếu không có, dùng index gốc)
-SIM_THRESHOLD = 0.90                              # ngưỡng cosine similarity
-CACHE_FILE    = "feature_cache.pkl"               # cache embedding để chạy nhanh lần sau
-TARGET_SIZE   = (224, 224)                        # kích thước input ResNet50
+INPUT_XLSX    = "data_converted.xlsx"   # file dữ liệu nguồn
+OUTPUT_XLSX   = "data_with_dups.xlsx"   # file dữ liệu sau cập nhật
+PAIRS_XLSX    = "duplicate_pairs.xlsx"  # danh sách cặp trùng chi tiết
+TXT_REPORT    = "duplicates.txt"        # báo cáo văn bản (tuỳ chọn)
+IMAGE_COL     = "image_path"            # tên cột đường dẫn ảnh trong Excel
+ID_COL        = "id"                    # tên cột id (nếu không có, dùng index gốc)
+SIM_THRESHOLD = 0.90                    # ngưỡng cosine similarity
+CACHE_FILE    = "feature_cache.pkl"     # cache embedding để chạy nhanh lần sau
+TARGET_SIZE   = (224, 224)              # kích thước input ResNet50
 # ====================================================
 
 
@@ -39,9 +39,8 @@ def norm_path(p) -> str:
 
 def load_dataframe(input_xlsx: str, image_col: str, id_col: str):
     """Đọc Excel, lọc chỉ các dòng có ảnh .png và tồn tại trên đĩa.
-       Vẫn giữ lại các dòng không hợp lệ để gán NaN sau cùng.
+    Vẫn giữ lại các dòng không hợp lệ để gán NaN sau cùng.
     """
-    # Nếu thiếu openpyxl, cài: pip install openpyxl
     df = pd.read_excel(input_xlsx)
 
     if image_col not in df.columns:
@@ -166,22 +165,21 @@ def annotate_excel_with_duplicates(
     image_col: str,
     id_col: str,
     output_xlsx: str,
-    fill_empty_rows: bool = True,      # giữ hàng thiếu path & để NaN các cột trùng
+    fill_empty_rows: bool = True,  # giữ hàng thiếu path & để NaN các cột trùng
 ) -> None:
     """
     - Giữ nguyên mọi dòng gốc (kể cả image_path trống).
-    - is_duplicate: 0/1
-    - duplicate_with_paths: NaN nếu không có trùng; chứa chuỗi path phân tách ';' nếu có.
-    - KHÔNG tạo 'duplicate_with_ids' tổng hợp.
-    - Tạo các cột động 'duplicate_with_id_1', 'duplicate_with_id_2', ... (NaN nếu không có).
+    - Tạo cột:
+        * is_dup: 0/1
+        * dup_path_1, dup_path_2, ...
+        * (nếu có cột id) dup_id_1, dup_id_2, ...
+    - KHÔNG tạo cột gộp duplicate_with_paths.
     """
     out = df_all.copy()
 
     # Khởi tạo mặc định
-    if "is_duplicate" not in out.columns:
-        out["is_duplicate"] = 0
-    if "duplicate_with_paths" not in out.columns:
-        out["duplicate_with_paths"] = np.nan
+    if "is_dup" not in out.columns:
+        out["is_dup"] = 0
 
     has_id = id_col in out.columns
 
@@ -189,6 +187,7 @@ def annotate_excel_with_duplicates(
     s_path = out.get(image_col, pd.Series([""] * len(out))).astype(str)
     path_norm_series = s_path.map(norm_path)
 
+    # Map: path_norm -> row_index / id
     path_to_index = {}
     for idx, p in enumerate(path_norm_series):
         if p:  # chỉ map các dòng có path hợp lệ (không trống)
@@ -201,7 +200,7 @@ def annotate_excel_with_duplicates(
                 path_to_id[p] = out.loc[idx, id_col]
 
     # Gom các cặp theo path_norm
-    dups_paths = defaultdict(set)  # path_norm -> set(paths trùng)
+    dups_paths = defaultdict(set)  # path_norm -> set(paths trùng - raw)
     dups_ids   = defaultdict(set)  # path_norm -> set(ids trùng)
 
     for _, row in pairs_df.iterrows():
@@ -221,47 +220,57 @@ def annotate_excel_with_duplicates(
                 if id1 is not None:
                     dups_ids[np2].add(id1)
 
-    # 1) Hàng trống path: set is_duplicate=0, duplicate_with_paths = NaN
+    # 1) Hàng trống path: set is_dup=0
     if fill_empty_rows:
         empty_mask = (path_norm_series == "") | (path_norm_series.isna())
-        out.loc[empty_mask, "is_duplicate"] = 0
-        out.loc[empty_mask, "duplicate_with_paths"] = np.nan
+        out.loc[empty_mask, "is_dup"] = 0
 
     # 2) Với các hàng có path hợp lệ: gán theo cặp
-    for npth, idx in path_to_index.items():
-        others_p = sorted(list(dups_paths.get(npth, [])))
-        if others_p:
-            out.at[idx, "is_duplicate"] = 1
-            out.at[idx, "duplicate_with_paths"] = ";".join(others_p)
-        else:
-            out.at[idx, "is_duplicate"] = 0
-            out.at[idx, "duplicate_with_paths"] = np.nan
+    #    Tính max số lượng trùng để tạo cột dup_path_k / dup_id_k
+    max_dup_paths = 0
+    for npth in path_to_index.keys():
+        max_dup_paths = max(max_dup_paths, len(dups_paths.get(npth, [])))
 
-    # 3) Tạo các cột duplicate_with_id_1, duplicate_with_id_2, ... nếu có ID
+    # Tạo cột dup_path_k
+    path_cols = []
+    for k in range(1, max_dup_paths + 1):
+        col = f"dup_path_{k}"
+        path_cols.append(col)
+        if col not in out.columns:
+            out[col] = np.nan
+
+    # Tạo cột dup_id_k (nếu có ID)
+    id_cols = []
     if has_id:
-        # Tối đa số ID trùng của một hàng
+        # tối đa số id trùng theo path
         max_dup_ids = 0
         for npth in path_to_index.keys():
             max_dup_ids = max(max_dup_ids, len(dups_ids.get(npth, [])))
+        for k in range(1, max_dup_ids + 1):
+            col = f"dup_id_{k}"
+            id_cols.append(col)
+            if col not in out.columns:
+                out[col] = np.nan
 
-        if max_dup_ids > 0:
-            # Tạo sẵn cột NaN
-            id_cols = []
-            for k in range(1, max_dup_ids + 1):
-                col_name = f"duplicate_with_id_{k}"
-                id_cols.append(col_name)
-                if col_name not in out.columns:
-                    out[col_name] = np.nan
+    # Gán dữ liệu cho từng hàng
+    for npth, idx in path_to_index.items():
+        # paths
+        others_p = sorted(list(dups_paths.get(npth, [])))
+        out.at[idx, "is_dup"] = 1 if others_p else 0
+        for k in range(1, max_dup_paths + 1):
+            col = f"dup_path_{k}"
+            val = others_p[k - 1] if k - 1 < len(others_p) else np.nan
+            out.at[idx, col] = val
 
-            # Gán từng ID trùng vào duplicate_with_id_k
-            for npth, idx in path_to_index.items():
-                ids_list = sorted(list(dups_ids.get(npth, [])))
-                for k in range(1, max_dup_ids + 1):
-                    col_name = f"duplicate_with_id_{k}"
-                    val = ids_list[k - 1] if k - 1 < len(ids_list) else np.nan
-                    out.at[idx, col_name] = val
+        # ids (nếu có)
+        if has_id:
+            ids_list = sorted(list(dups_ids.get(npth, [])))
+            for k in range(1, len(id_cols) + 1):
+                col = f"dup_id_{k}"
+                val = ids_list[k - 1] if k - 1 < len(ids_list) else np.nan
+                out.at[idx, col] = val
 
-    # 4) Lưu file kết quả
+    # 3) Lưu file kết quả
     out.to_excel(output_xlsx, index=False)
     print(f"[OK] Đã lưu file kết quả: {output_xlsx}")
 
